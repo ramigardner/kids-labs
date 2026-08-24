@@ -99,7 +99,10 @@ class RoleReveal:
 
 class TriviaScreen:
     def __init__(self, fonts, level_completed, player_won): self.fonts = fonts; self.t = 0.0; self.done = False; self.player_won = player_won; idx = min(level_completed, len(TRIVIA)-1); self.year, self.text = TRIVIA[idx]; sfx.play("door")
-    def update(self, dt): self.t += dt; if self.t > 6.0: self.done = True
+    def update(self, dt):
+        self.t += dt
+        if self.t > 6.0:
+            self.done = True
     def draw(self, surf):
         surf.fill(BG_COLOR); draw_grid(surf, (0,0,W,H), 32, GRID_COLOR)
         if self.player_won: px(surf, "★ NIVEL COMPLETADO ★", W//2, 100, self.fonts["lg"], C64["lt_green"], center=True)
