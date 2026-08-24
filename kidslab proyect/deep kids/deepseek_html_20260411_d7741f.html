@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌿 ASPR Kids Lab · Jardín de Confianza</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <!-- Editor de código simple (CodeMirror) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/python/python.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🌱 ASPR Kids Lab</h1>
+            <p>El jardín donde la confianza crece con historia verificable</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="garden">🌸 Jardín en Vivo</button>
+            <button class="tab-btn" data-tab="chain">🔗 Cadena de Bloques</button>
+            <button class="tab-btn" data-tab="lab">🧪 Laboratorio de Código</button>
+        </div>
+
+        <!-- PESTAÑA JARDÍN -->
+        <div id="garden" class="tab-pane active">
+            <div class="reality-box">
+                <span class="label">🌡️ Temperatura externa (Anclaje):</span>
+                <span id="ext-temp">--</span> °C
+                <span style="margin-left: 20px;">📊 Realidad calculada: <span id="reality-value">--</span></span>
+            </div>
+
+            <div class="animals-grid" id="animals-container">
+                <!-- Se llena con JS -->
+            </div>
+
+            <div style="text-align: center; margin: 20px;">
+                <button id="simulate-round-btn" class="btn primary">🔄 Simular Ronda</button>
+            </div>
+        </div>
+
+        <!-- PESTAÑA CADENA DE BLOQUES -->
+        <div id="chain" class="tab-pane">
+            <h2>🧾 Historia del Jardín (Hash Chain)</h2>
+            <div id="chain-container" class="chain-list">
+                <!-- Bloques se renderizan aquí -->
+            </div>
+        </div>
+
+        <!-- PESTAÑA LABORATORIO -->
+        <div id="lab" class="tab-pane">
+            <div class="lab-layout">
+                <div class="challenge-selector">
+                    <h3>📋 Desafíos</h3>
+                    <select id="challenge-select">
+                        <option value="buho_fix">🦉 Arreglar al Búho</option>
+                        <option value="zorro_speed">🦊 Acelerar al Zorro</option>
+                    </select>
+                    <p id="challenge-desc">Selecciona un desafío</p>
+                </div>
+                <div class="editor-area">
+                    <h3>✏️ Editor de Código</h3>
+                    <textarea id="code-editor"></textarea>
+                    <button id="run-code-btn" class="btn success">▶ Ejecutar Código</button>
+                    <div id="code-output" class="output-console"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/editor.js"></script>
+</body>
+</html>

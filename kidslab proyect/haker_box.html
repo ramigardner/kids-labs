@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>🐧 Math Quest 64 · Cofres Matemáticos</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: radial-gradient(circle at 20% 30%, #1a2a3a, #0b1219);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Segoe UI', 'Courier New', monospace;
+      padding: 16px;
+      margin: 0;
+      touch-action: manipulation;
+    }
+
+    .game-wrapper {
+      max-width: 700px;
+      width: 100%;
+      background: rgba(10, 20, 30, 0.75);
+      backdrop-filter: blur(4px);
+      border: 2px solid #2ecc71;
+      border-radius: 32px;
+      padding: 20px 16px 24px;
+      box-shadow: 0 12px 0 #0e2b1f, 0 0 20px #2ecc7140;
+    }
+
+    /* Panel del cofre (canvas) */
+    .chest-panel {
+      background: #0f1c26;
+      border-radius: 24px;
+      padding: 12px;
+      border: 1px solid #27ae60;
+      box-shadow: inset 0 0 10px #00000055, 0 6px 0 #0b1a14;
+      margin-bottom: 18px;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #102231;
+      border-radius: 18px;
+      border: 2px solid #2ecc71;
+      box-shadow: 0 0 0 2px #0e1e14 inset;
+      image-rendering: crisp-edges; /* estilo pixelado suave */
+    }
+
+    /* Panel de stats + mascota */
+    .stats-panel {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 16px;
+      color: #d4f7e3;
+      text-shadow: 0 2px 2px black;
+    }
+
+    .pet-card {
+      background: #1d3b2c;
+      padding: 10px 18px;
+      border-radius: 60px;
+      border: 1px solid #2ecc71;
+      box-shadow: 0 5px 0 #0e2b1f, inset 0 1px 4px #a3f0c0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 2;
+      min-width: 180px;
+    }
+
+    .pet-emoji {
+      font-size: 38px;
+      background: #2d5a44;
+      width: 52px;
+      height: 52px;
+      border-radius: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #7bed9f;
+      box-shadow: 0 3px 0 #1a3b2a;
+    }
+
+    .pet-info {
+      flex: 1;
+    }
+
+    .pet-name {
+      font-weight: bold;
+      font-size: 1.2rem;
+      letter-spacing: 1px;
+      color: #c6ffd6;
+    }
+
+    .pet-stars {
+      color: #f1c40f;
+      font-size: 1.2rem;
+      letter-spacing: 3px;
+    }
+
+    .hp-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+    }
+
+    .hp-fill {
+      height: 10px;
+      background: #e74c3c;
+      border-radius: 20px;
+      box-shadow: inset 0 1px 3px black;
+      flex: 1;
+    }
+
+    .hp-fill span {
+      display: block;
+      height: 100%;
+      width: 100%;
+      background: #2ecc71;
+      border-radius: 20px;
+      box-shadow: 0 0 6px #2ecc71;
+    }
+
+    .resources {
+      background: #0e2b24;
+      border-radius: 40px;
+      padding: 8px 18px;
+      border: 1px solid #27ae60;
+      box-shadow: 0 4px 0 #0b1f18, inset 0 0 6px #5fe49b;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      flex: 1;
+      justify-content: space-around;
+      font-weight: bold;
+    }
+
+    .xp-bar {
+      width: 100px;
+      height: 10px;
+      background: #1e3d3d;
+      border-radius: 10px;
+      margin-left: 5px;
+    }
+
+    .xp-fill {
+      height: 100%;
+      background: #f39c12;
+      border-radius: 10px;
+      box-shadow: 0 0 6px #f1c40f;
+    }
+
+    /* Teclado numérico + acciones */
+    .numpad {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin: 18px 0 12px;
+    }
+
+    .btn {
+      background: #1c3d2f;
+      border: none;
+      border-bottom: 5px solid #0e2b1c;
+      color: #e6ffee;
+      font-size: 2rem;
+      font-weight: bold;
+      font-family: 'Courier New', monospace;
+      padding: 12px 0;
+      border-radius: 60px;
+      box-shadow: 0 6px 0 #0b1f14, inset 0 2px 8px #b8ffcd88;
+      cursor: pointer;
+      transition: 0.05s linear;
+      touch-action: manipulation;
+      text-shadow: 0 2px 0 #00000080;
+    }
+
+    .btn.small {
+      font-size: 1.3rem;
+      background: #1f4a3a;
+    }
+
+    .btn:active {
+      transform: translateY(4px);
+      border-bottom-width: 2px;
+      box-shadow: 0 2px 0 #0b1f14, inset 0 1px 5px #b8ffcd;
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      transform: none;
+      pointer-events: none;
+      filter: grayscale(0.4);
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .action-btn {
+      background: #224f4f;
+      border-bottom: 4px solid #0e2b2b;
+      font-size: 1.2rem;
+      padding: 10px 18px;
+      flex: 1 0 100px;
+      border-radius: 40px;
+      color: #d2ffe2;
+      box-shadow: 0 4px 0 #0b2626, inset 0 1px 5px #a2f5d1;
+    }
+
+    .log-area {
+      background: #05100c;
+      border-radius: 16px;
+      padding: 8px 14px;
+      margin-top: 16px;
+      color: #9ef0c5;
+      font-family: 'Courier New', monospace;
+      font-size: 0.9rem;
+      border: 1px solid #2ecc71;
+      max-height: 65px;
+      overflow-y: auto;
+      box-shadow: inset 0 0 10px black;
+    }
+
+    .highlight {
+      color: #f1c40f;
+    }
+  </style>
+</head>
+<body>
+<div class="game-wrapper">
+  <!-- Canvas del cofre -->
+  <div class="chest-panel">
+    <canvas id="chestCanvas" width="600" height="200"></canvas>
+  </div>
+
+  <!-- Mascota y recursos -->
+  <div class="stats-panel">
+    <div class="pet-card" id="petCard">
+      <div class="pet-emoji" id="petEmoji">🐧</div>
+      <div class="pet-info">
+        <div class="pet-name" id="petName">Pinguino</div>
+        <div class="pet-stars" id="petStars">⭐⭐⭐○○</div>
+        <div class="hp-bar">
+          <span style="font-size:0.9rem;">❤️</span>
+          <div class="hp-fill"><span id="petHpFill" style="width:100%"></span></div>
+          <span id="petHpText">100%</span>
+        </div>
+      </div>
+    </div>
+    <div class="resources">
+      <div>⭐ Nv.<span id="levelDisplay">1</span></div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <span>XP</span>
+        <div class="xp-bar"><div class="xp-fill" id="xpFill" style="width:0%"></div></div>
+        <span id="xpText">0/100</span>
+      </div>
+      <div>🪙 <span id="coinsDisplay">0</span></div>
+    </div>
+  </div>
+
+  <!-- Teclado numérico -->
+  <div class="numpad">
+    <button class="btn" data-num="7">7</button>
+    <button class="btn" data-num="8">8</button>
+    <button class="btn" data-num="9">9</button>
+    <button class="btn" data-num="4">4</button>
+    <button class="btn" data-num="5">5</button>
+    <button class="btn" data-num="6">6</button>
+    <button class="btn" data-num="1">1</button>
+    <button class="btn" data-num="2">2</button>
+    <button class="btn" data-num="3">3</button>
+    <button class="btn" data-num="0">0</button>
+    <button class="btn small" id="enterBtn">↵ ENTER</button>
+    <button class="btn small" id="backspaceBtn">⌫</button>
+  </div>
+
+  <!-- Acciones -->
+  <div class="action-bar">
+    <button class="action-btn" id="pistaBtn">💡 Pista (-5🪙)</button>
+    <button class="action-btn" id="mascotasBtn">🐾 Mascotas</button>
+    <button class="action-btn" id="siguienteBtn">⏩ Siguiente</button>
+    <button class="action-btn" id="guardarBtn">💾 Guardar</button>
+  </div>
+
+  <!-- Log / mensajes -->
+  <div class="log-area" id="logMessage">✨ ¡Resuelve la operación para abrir el cofre!</div>
+</div>
+
+<script>
+  (function(){
+    "use strict";
+
+    // ---------- CONFIGURACIÓN INICIAL (datos fieles al juego original) ----------
+    const MASCOTAS_DATA = [
+      { nombre: "Pinguino", emoji: "🐧", habilidad: "Doble XP", nivelDesbloqueo: 1 },
+      { nombre: "Robot",    emoji: "🤖", habilidad: "Tiempo extra", nivelDesbloqueo: 3 },
+      { nombre: "Dragon",   emoji: "🐲", habilidad: "Pista gratis", nivelDesbloqueo: 5 },
+      { nombre: "Alien",    emoji: "👾", habilidad: "Vida infinita", nivelDesbloqueo: 7 },
+      { nombre: "Ninja",    emoji: "🥷", habilidad: "Salto nivel", nivelDesbloqueo: 10 }
+    ];
+
+    // ---------- ESTADO GLOBAL ----------
+    let jugador = {
+      nombre: "Aventurero",
+      nivel: 1,
+      xp: 0,
+      xpNecesario: 100,
+      monedas: 0,
+      cofresAbiertos: 0,
+      mascotas: [],         // array de objetos mascota (incluye estrellas y vida)
+      mascotaActiva: null,
+    };
+
+    let cofres = [];           // array de cofres del nivel actual
+    let cofreActualIdx = 0;
+    let nivelCompletado = false;
+    let respuestaActual = '';  // número que el jugador está construyendo
+
+    // Referencias DOM
+    const canvas = document.getElementById('chestCanvas');
+    const ctx = canvas.getContext('2d');
+    const logEl = document.getElementById('logMessage');
+    
+    // Elementos de stats
+    const petEmoji = document.getElementById('petEmoji');
+    const petName = document.getElementById('petName');
+    const petStars = document.getElementById('petStars');
+    const petHpFill = document.getElementById('petHpFill');
+    const petHpText = document.getElementById('petHpText');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const xpFill = document.getElementById('xpFill');
+    const xpText = document.getElementById('xpText');
+    const coinsDisplay = document.getElementById('coinsDisplay');
+
+    // ---------- FUNCIONES AUXILIARES ----------
+    function log(msg, esBueno = true) {
+      logEl.innerHTML = msg;
+    }
+
+    // Actualizar toda la UI de stats
+    function actualizarUI() {
+      if (!jugador.mascotaActiva) return;
+      const pet = jugador.mascotaActiva;
+      petEmoji.textContent = pet.emoji;
+      petName.textContent = pet.nombre;
+      const estrellas = '⭐'.repeat(pet.estrellas) + '○'.repeat(5 - pet.estrellas);
+      petStars.textContent = estrellas;
+      const hpPorcentaje = Math.max(0, pet.vida);
+      petHpFill.style.width = hpPorcentaje + '%';
+      petHpText.textContent = hpPorcentaje + '%';
+      
+      levelDisplay.textContent = jugador.nivel;
+      const xpRatio = (jugador.xp / jugador.xpNecesario) * 100;
+      xpFill.style.width = Math.min(100, xpRatio) + '%';
+      xpText.textContent = `${jugador.xp}/${jugador.xpNecesario}`;
+      coinsDisplay.textContent = jugador.monedas;
+    }
+
+    // Subir de nivel
+    function subirNivel() {
+      jugador.nivel++;
+      jugador.xp -= jugador.xpNecesario;
+      jugador.xpNecesario = Math.floor(jugador.xpNecesario * 1.2);
+      // Desbloquear mascotas
+      MASCOTAS_DATA.forEach(mData => {
+        if (mData.nivelDesbloqueo === jugador.nivel && !jugador.mascotas.find(m => m.nombre === mData.nombre)) {
+          const nuevaMascota = {
+            ...mData,
+            estrellas: 0,
+            vida: 100,
+          };
+          jugador.mascotas.push(nuevaMascota);
+          log(`🎉 ¡NUEVA MASCOTA! ${nuevaMascota.emoji} ${nuevaMascota.nombre} desbloqueada.`);
+        }
+      });
+      if (jugador.xp >= jugador.xpNecesario) subirNivel(); // por si acaso
+      actualizarUI();
+    }
+
+    // Ganar XP (con bonus de mascota)
+    function ganarXP(cantidad) {
+      let bonus = (jugador.mascotaActiva?.habilidad === 'Doble XP') ? 2 : 1;
+      let total = cantidad * bonus;
+      jugador.xp += total;
+      while (jugador.xp >= jugador.xpNecesario) {
+        subirNivel();
+      }
+      actualizarUI();
+      return total;
+    }
+
+    // Generar un cofre según nivel
+    function generarCofre(nivel) {
+      let operacion;
+      if (nivel === 1) {
+        let a = rand(0,10), b = rand(0,10);
+        operacion = { tipo: '+', a, b, res: a+b, sim: '+' };
+      } else if (nivel === 2) {
+        let a = rand(5,15), b = rand(0,10);
+        operacion = { tipo: '-', a, b, res: a-b, sim: '-' };
+      } else if (nivel === 3) {
+        let a = rand(1,10), b = rand(1,10), c = rand(1,5);
+        operacion = { tipo: '++', a, b, c, res: a+b+c, sim: '++' };
+      } else if (nivel === 4) {
+        let a = rand(2,5), b = rand(2,5);
+        operacion = { tipo: 'x', a, b, res: a*b, sim: 'x' };
+      } else {
+        let op = rand(0,2);
+        if (op === 0) {
+          let a = rand(10,50), b = rand(5,30);
+          operacion = { tipo: '+', a, b, res: a+b, sim: '+' };
+        } else if (op === 1) {
+          let a = rand(20,60), b = rand(5,20);
+          operacion = { tipo: '-', a, b, res: a-b, sim: '-' };
+        } else {
+          let a = rand(2,9), b = rand(2,9);
+          operacion = { tipo: 'x', a, b, res: a*b, sim: 'x' };
+        }
+      }
+      const recompensa = {
+        xp: nivel * 15,
+        monedas: rand(5,15) * nivel,
+        estrella: Math.random() > 0.7
+      };
+      return { abierto: false, operacion, recompensa };
+    }
+
+    function rand(min, max) {
+      return Math.floor(Math.random() * (max - min + 1)) + min;
+    }
+
+    // Crear nivel (5 cofres)
+    function crearNivel() {
+      cofres = [];
+      for (let i=0; i<5; i++) {
+        cofres.push(generarCofre(jugador.nivel));
+      }
+      cofreActualIdx = 0;
+      nivelCompletado = false;
+      respuestaActual = '';
+      log('🔓 Nuevo nivel. ¡Abre los cofres!');
+      dibujarCanvas();
+    }
+
+    // Dibujar canvas del cofre actual
+    function dibujarCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (cofres.length === 0) return;
+      const cofre = cofres[cofreActualIdx];
+      
+      // Fondo
+      ctx.fillStyle = '#102231';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Marco
+      ctx.strokeStyle = '#2ecc71';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(3, 3, canvas.width-6, canvas.height-6);
+      
+      // Texto cofre
+      ctx.font = 'bold 20px "Courier New", monospace';
+      ctx.fillStyle = '#f1c40f';
+      ctx.textAlign = 'center';
+      ctx.fillText(`COFRE ${cofreActualIdx+1}/5 · NIVEL ${jugador.nivel}`, canvas.width/2, 40);
+      
+      if (!cofre.abierto) {
+        ctx.font = '28px "Segoe UI", sans-serif';
+        ctx.fillStyle = '#ecf0f1';
+        ctx.fillText('📦 CERRADO 🔒', canvas.width/2, 110);
+        ctx.font = '24px "Courier New", monospace';
+        let opTexto = '';
+        if (cofre.operacion.tipo === '++') {
+          opTexto = `${cofre.operacion.a} + ${cofre.operacion.b} + ${cofre.operacion.c} = ?`;
+        } else {
+          opTexto = `${cofre.operacion.a} ${cofre.operacion.sim} ${cofre.operacion.b} = ?`;
+        }
+        ctx.fillStyle = '#a3f0c0';
+        ctx.fillText(opTexto, canvas.width/2, 170);
+        
+        // Mostrar respuesta en construcción
+        if (respuestaActual.length > 0) {
+          ctx.font = 'bold 28px monospace';
+          ctx.fillStyle = '#f39c12';
+          ctx.fillText(respuestaActual, canvas.width/2, 210);
+        }
+      } else {
+        ctx.font = '26px sans-serif';
+        ctx.fillStyle = '#2ecc71';
+        ctx.fillText('🎁 ¡ABIERTO! ✓', canvas.width/2, 120);
+        ctx.font = '18px monospace';
+        ctx.fillStyle = '#b8ffcd';
+        ctx.fillText(`+${cofre.recompensa.xp} XP  +${cofre.recompensa.monedas} 🪙`, canvas.width/2, 170);
+      }
+    }
+
+    // Intentar abrir cofre con respuesta numérica
+    function intentarAbrir() {
+      if (cofres.length === 0) return;
+      const cofre = cofres[cofreActualIdx];
+      if (cofre.abierto) {
+        log('⏩ Este cofre ya está abierto. Pulsa Siguiente.');
+        return;
+      }
+      const resp = parseInt(respuestaActual, 10);
+      if (isNaN(resp)) {
+        log('❌ Ingresa un número válido.');
+        return;
+      }
+      
+      if (resp === cofre.operacion.res) {
+        // ÉXITO
+        cofre.abierto = true;
+        const rec = cofre.recompensa;
+        const xpGanado = ganarXP(rec.xp);
+        jugador.monedas += rec.monedas;
+        jugador.cofresAbiertos++;
+        
+        let mascota = jugador.mascotaActiva;
+        mascota.vida = Math.min(100, mascota.vida + 10);
+        if (rec.estrella) {
+          mascota.estrellas = Math.min(5, mascota.estrellas + 1);
+        }
+        
+        log(`✅ ¡CORRECTO! +${xpGanado} XP, +${rec.monedas}🪙 ${rec.estrella?'⭐ +1 Estrella':''}`);
+        actualizarUI();
+        respuestaActual = '';
+        dibujarCanvas();
+        
+        // Si es el último cofre y se abre, nivel completado
+        if (cofreActualIdx === cofres.length-1) {
+          nivelCompletado = true;
+          log('🎉 ¡NIVEL COMPLETADO! Pulsa Siguiente para continuar.');
+        }
+      } else {
+        // FALLO
+        jugador.mascotaActiva.vida = Math.max(0, jugador.mascotaActiva.vida - 10);
+        log(`❌ Incorrecto. Era ${cofre.operacion.res}. -10% vida.`);
+        actualizarUI();
+        if (jugador.mascotaActiva.vida <= 0) {
+          log('💔 ¡Tu mascota se ha debilitado! Cúrala en el menú de mascotas.');
+        }
+        respuestaActual = '';
+        dibujarCanvas();
+      }
+    }
+
+    // Pista
+    function usarPista() {
+      const cofre = cofres[cofreActualIdx];
+      if (cofre.abierto) { log('Cofre ya abierto.'); return; }
+      if (jugador.monedas < 5) { log('🪙 Necesitas 5 monedas.'); return; }
+      jugador.monedas -= 5;
+      const res = cofre.operacion.res;
+      log(`💡 PISTA: El resultado está entre ${res-2} y ${res+2}`);
+      actualizarUI();
+    }
+
+    // Siguiente cofre / nivel
+    function siguiente() {
+      if (!cofres[cofreActualIdx]?.abierto) {
+        log('🔒 Debes abrir el cofre actual primero.');
+        return;
+      }
+      if (cofreActualIdx < cofres.length - 1) {
+        cofreActualIdx++;
+        respuestaActual = '';
+        dibujarCanvas();
+        log(`Cofre ${cofreActualIdx+1}/5`);
+      } else if (nivelCompletado) {
+        // Pasar de nivel
+        crearNivel();
+        actualizarUI();
+        dibujarCanvas();
+        log(`🌟 Subiste al nivel ${jugador.nivel}!`);
+      } else {
+        log('🏁 Has completado todos los cofres. ¡Nivel superado!');
+        nivelCompletado = true;
+      }
+    }
+
+    // Menú mascotas (simple)
+    function mostrarMascotas() {
+      if (!jugador.mascotas.length) return;
+      let lista = jugador.mascotas.map((m,i) => 
+        `${i+1}. ${m.emoji} ${m.nombre} ${'⭐'.repeat(m.estrellas)} ❤️${m.vida}% ${m===jugador.mascotaActiva?'✅':''}`
+      ).join('\n');
+      let opcion = prompt(`Tus mascotas:\n${lista}\n\nElige número para activar, o:\nC: Curar activa (20🪙)\nCancelar para volver`);
+      if (!opcion) return;
+      opcion = opcion.trim().toLowerCase();
+      if (opcion === 'c') {
+        if (jugador.monedas >= 20) {
+          jugador.monedas -= 20;
+          jugador.mascotaActiva.vida = 100;
+          log('💖 Mascota curada al 100%');
+          actualizarUI();
+        } else {
+          log('🪙 No tienes 20 monedas');
+        }
+      } else {
+        let idx = parseInt(opcion) - 1;
+        if (!isNaN(idx) && idx >= 0 && idx < jugador.mascotas.length) {
+          jugador.mascotaActiva = jugador.mascotas[idx];
+          log(`🐾 Activaste a ${jugador.mascotaActiva.nombre}`);
+          actualizarUI();
+        }
+      }
+    }
+
+    // Guardar partida en localStorage
+    function guardarPartida() {
+      const saveData = {
+        nombre: jugador.nombre,
+        nivel: jugador.nivel,
+        xp: jugador.xp,
+        xpNecesario: jugador.xpNecesario,
+        monedas: jugador.monedas,
+        mascotas: jugador.mascotas.map(m => ({
+          nombre: m.nombre, estrellas: m.estrellas, vida: m.vida
+        })),
+        mascotaActivaNombre: jugador.mascotaActiva?.nombre,
+      };
+      localStorage.setItem('mathQuest64_save', JSON.stringify(saveData));
+      log('💾 Partida guardada.');
+    }
+
+    function cargarPartida() {
+      const saved = localStorage.getItem('mathQuest64_save');
+      if (!saved) return false;
+      try {
+        const data = JSON.parse(saved);
+        jugador.nombre = data.nombre || 'Aventurero';
+        jugador.nivel = data.nivel;
+        jugador.xp = data.xp;
+        jugador.xpNecesario = data.xpNecesario;
+        jugador.monedas = data.monedas;
+        // Reconstruir mascotas
+        jugador.mascotas = MASCOTAS_DATA.filter(mData => mData.nivelDesbloqueo <= jugador.nivel)
+          .map(mData => {
+            const savedM = data.mascotas?.find(m => m.nombre === mData.nombre);
+            return {
+              ...mData,
+              estrellas: savedM?.estrellas || 0,
+              vida: savedM?.vida || 100,
+            };
+          });
+        const activaNombre = data.mascotaActivaNombre || 'Pinguino';
+        jugador.mascotaActiva = jugador.mascotas.find(m => m.nombre === activaNombre) || jugador.mascotas[0];
+        actualizarUI();
+        log('📂 Partida cargada.');
+        return true;
+      } catch(e) {
+        return false;
+      }
+    }
+
+    // Inicializar juego nuevo
+    function iniciarNuevoJuego() {
+      jugador.nombre = 'Aventurero';
+      jugador.nivel = 1;
+      jugador.xp = 0;
+      jugador.xpNecesario = 100;
+      jugador.monedas = 20; // para empezar bien
+      jugador.mascotas = [{
+        ...MASCOTAS_DATA[0],
+        estrellas: 0,
+        vida: 100,
+      }];
+      jugador.mascotaActiva = jugador.mascotas[0];
+      crearNivel();
+      actualizarUI();
+    }
+
+    // ---------- CONFIGURACIÓN DE EVENTOS ----------
+    function bindEvents() {
+      document.querySelectorAll('[data-num]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          if (cofres[cofreActualIdx]?.abierto) {
+            log('Cofre ya abierto. Pulsa Siguiente.');
+            return;
+          }
+          respuestaActual += e.target.getAttribute('data-num');
+          dibujarCanvas();
+        });
+      });
+      
+      document.getElementById('enterBtn').addEventListener('click', () => {
+        intentarAbrir();
+      });
+      
+      document.getElementById('backspaceBtn').addEventListener('click', () => {
+        respuestaActual = respuestaActual.slice(0, -1);
+        dibujarCanvas();
+      });
+      
+      document.getElementById('pistaBtn').addEventListener('click', usarPista);
+      document.getElementById('siguienteBtn').addEventListener('click', siguiente);
+      document.getElementById('mascotasBtn').addEventListener('click', mostrarMascotas);
+      document.getElementById('guardarBtn').addEventListener('click', guardarPartida);
+      
+      // Teclado físico (números, enter, backspace)
+      window.addEventListener('keydown', (e) => {
+        if (e.key >= '0' && e.key <= '9') {
+          if (!cofres[cofreActualIdx]?.abierto) {
+            respuestaActual += e.key;
+            dibujarCanvas();
+          }
+          e.preventDefault();
+        } else if (e.key === 'Enter') {
+          intentarAbrir();
+          e.preventDefault();
+        } else if (e.key === 'Backspace') {
+          respuestaActual = respuestaActual.slice(0, -1);
+          dibujarCanvas();
+          e.preventDefault();
+        }
+      });
+    }
+
+    // Comprobar si hay partida guardada
+    if (!cargarPartida()) {
+      iniciarNuevoJuego();
+    } else {
+      crearNivel(); // nivel acorde al estado cargado
+    }
+    dibujarCanvas();
+    bindEvents();
+    actualizarUI();
+  })();
+</script>
+</body>
+</html>

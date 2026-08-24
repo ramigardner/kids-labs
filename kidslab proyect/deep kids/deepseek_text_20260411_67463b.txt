@@ -1,0 +1,18 @@
+aspr_kids_lab/
+├── app.py                     # Servidor Flask + SocketIO
+├── garden_state.py            # Lógica del jardín y animales
+├── hash_chain.py              # Cadena de bloques simplificada
+├── challenges.py              # Gestor de desafíos de código
+├── requirements.txt           # Dependencias
+├── templates/
+│   └── index.html             # Dashboard interactivo
+├── static/
+│   ├── css/
+│   │   └── style.css          # Estilos coloridos
+│   └── js/
+│       ├── app.js             # Lógica del dashboard
+│       └── editor.js          # Editor de código
+└── challenge_files/           # Funciones Python editables por niños
+    ├── buho.py
+    ├── zorro.py
+    └── topo.py

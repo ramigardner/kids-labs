@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>🔍 Detective Lab · KidsLab</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background: #0a0e1a;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font-family: 'Courier New', 'Courier', 'Lucida Sans Typewriter', monospace;
+      padding: 12px;
+      touch-action: manipulation;
+    }
+
+    .game-container {
+      max-width: 1024px;
+      width: 100%;
+      background: #10142a;
+      border: 4px solid #6c8cff;
+      border-radius: 20px;
+      padding: 16px 12px 20px;
+      box-shadow: 0 12px 0 #0b0e1e, inset 0 0 0 2px #1e2b5c;
+      position: relative;
+    }
+
+    /* Canvas principal */
+    canvas {
+      display: block;
+      width: 100%;
+      height: auto;
+      background: #181c3a;
+      border: 3px solid #4a6cbf;
+      border-radius: 12px;
+      box-shadow: inset 0 0 15px #00000088;
+      image-rendering: crisp-edges; /* pixelado */
+      touch-action: none;
+    }
+
+    /* Panel de instrucciones rápido */
+    .key-hint {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 8px;
+      color: #9cb8ff;
+      font-size: 0.8rem;
+      text-shadow: 0 2px 0 black;
+      flex-wrap: wrap;
+    }
+
+    .restart-tip {
+      color: #f5e56b;
+      background: #1f2b4e;
+      padding: 4px 14px;
+      border-radius: 30px;
+      border: 1px solid #f5c542;
+    }
+  </style>
+</head>
+<body>
+<div class="game-container">
+  <canvas id="gameCanvas" width="1024" height="640"></canvas>
+  <div class="key-hint">
+    <span>🕹️ A: 1-9  |  B: QWE ASD ZXC  |  ↵ ENTER confirma</span>
+    <span class="restart-tip">⭯ [R] Reiniciar</span>
+  </div>
+</div>
+<script>
+  (function(){
+    "use strict";
+
+    // ---------- CONFIGURACIÓN ----------
+    const W = 1024, H = 640;
+    const TOTAL_CHALLENGES = 6;
+    const VMIN = 1, VMAX = 9;
+    const MAT_CELL_W = 72, MAT_CELL_H = 54, MAT_GAP = 6;
+
+    // Paleta C64
+    const C64 = {
+      bg:      '#10142a',
+      grid:    '#1e2450',
+      border:  '#6c8cff',
+      white:   '#fffff0',
+      cyan:    '#54ffff',
+      yellow:  '#f0f050',
+      green:   '#70ff70',
+      red:     '#ff5050',
+      grey:    '#8080c0',
+      dim:     '#32325a',
+      black:   '#000000',
+      orange:  '#ffa028',
+      magenta: '#dc50dc'
+    };
+
+    // Mascotas
+    const PET_TYPES = [
+      { name: "Saltarina", emoji: "🐸", poder: "Salta bugs" },
+      { name: "Tortu",     emoji: "🐢", poder: "Escudo" },
+      { name: "Misifú",    emoji: "🐱", poder: "Vida extra" },
+      { name: "Pulgi",     emoji: "🐶", poder: "Olfato" },
+      { name: "Pinguino",  emoji: "🐧", poder: "Congela" }
+    ];
+
+    // ---------- ESTADO GLOBAL ----------
+    let canvas, ctx;
+    let gameState = 'playing'; // 'playing', 'modem', 'gameover'
+    let score = 0, errors = 0, challengeIndex = 0;
+    let karma = 0, power = 50;
+    let pet = { ...PET_TYPES[Math.floor(Math.random() * PET_TYPES.length)] };
+    
+    // Matrices
+    let A = [], B = [], C = [];
+    // Desafío actual
+    let targetName = '', targetValue = 0;
+    let validCombos = new Set(); // strings "r1,c1,r2,c2"
+    let selA = null, selB = null; // {r,c}
+    let confirmed = false, resultShown = false;
+    let feedbackMsg = '', feedbackColor = C64.white, feedbackTimer = 0;
+    let flashColor = null, flashAlpha = 0;
+
+    // Modem
+    let modemActive = false, modemUntil = 0, modemLines = [], modemStartTime = 0;
+    
+    // Animación
+    let animTime = 0;
+    let demoTime = 0;
+
+    // Audio context (iniciado por gesto)
+    let audioCtx = null;
+    let sfxEnabled = false;
+
+    // Referencias UI
+    const canvasEl = document.getElementById('gameCanvas');
+    ctx = canvasEl.getContext('2d');
+    canvas = canvasEl;
+
+    // ---------- UTILIDADES ----------
+    function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+    function cellName(mat, r, c) { return mat + (r*3 + c + 1); }
+
+    // Generar matrices
+    function generateMatrices() {
+      A = []; B = []; C = [];
+      for (let r=0; r<3; r++) {
+        let rowA = [], rowB = [], rowC = [];
+        for (let c=0; c<3; c++) {
+          let va = rand(VMIN, VMAX);
+          let vb = rand(VMIN, VMAX);
+          rowA.push(va);
+          rowB.push(vb);
+          rowC.push(va + vb);
+        }
+        A.push(rowA); B.push(rowB); C.push(rowC);
+      }
+    }
+
+    // Crear nuevo desafío
+    function newChallenge() {
+      // Elegir celda C objetivo al azar
+      let tr = rand(0,2), tc = rand(0,2);
+      targetValue = C[tr][tc];
+      targetName = cellName('C', tr, tc);
+      
+      validCombos.clear();
+      for (let r1=0; r1<3; r1++) {
+        for (let c1=0; c1<3; c1++) {
+          for (let r2=0; r2<3; r2++) {
+            for (let c2=0; c2<3; c2++) {
+              if (A[r1][c1] + B[r2][c2] === targetValue) {
+                validCombos.add(`${r1},${c1},${r2},${c2}`);
+              }
+            }
+          }
+        }
+      }
+      
+      selA = selB = null;
+      confirmed = false;
+      resultShown = false;
+      feedbackTimer = 0;
+    }
+
+    // Iniciar nivel / reiniciar
+    function startNewGame() {
+      score = 0; errors = 0; challengeIndex = 0;
+      karma = 0; power = 50;
+      pet = { ...PET_TYPES[Math.floor(Math.random() * PET_TYPES.length)] };
+      generateMatrices();
+      newChallenge();
+      gameState = 'playing';
+      modemActive = false;
+      flashAlpha = 0;
+    }
+
+    // Siguiente desafío (o fin)
+    function nextChallenge() {
+      challengeIndex++;
+      if (challengeIndex >= TOTAL_CHALLENGES) {
+        gameState = 'gameover';
+        playSound('win');
+        return;
+      }
+      // Cada 2 desafíos regenerar matrices
+      if (challengeIndex % 2 === 0) generateMatrices();
+      newChallenge();
+      
+      // Activar modem
+      modemActive = true;
+      modemUntil = performance.now() + 1700;
+      modemStartTime = performance.now();
+      modemLines = [
+        "CONECTANDO AL SERVIDOR...",
+        "HANDSHAKE V.90 → 56000 bps",
+        "BUSCANDO SIGUIENTE DESAFIO...",
+        `DESAFIO ${challengeIndex+1} DE ${TOTAL_CHALLENGES} CARGANDO...`,
+        "MATRICES REGENERADAS",
+        "LISTO."
+      ].slice(0, 4 + (challengeIndex % 3));
+      playSound('modem');
+    }
+
+    // Confirmar respuesta
+    function confirmSelection() {
+      if (!selA || !selB || confirmed) return;
+      confirmed = true;
+      const combo = `${selA.r},${selA.c},${selB.r},${selB.c}`;
+      const isCorrect = validCombos.has(combo);
+      
+      if (isCorrect) {
+        score++;
+        karma += 20;
+        power = Math.min(100, power + 10);
+        flashColor = C64.green;
+        feedbackMsg = `✓  ${targetName} = ${cellName('A',selA.r,selA.c)}(${A[selA.r][selA.c]}) + ${cellName('B',selB.r,selB.c)}(${B[selB.r][selB.c]}) = ${targetValue}`;
+        feedbackColor = C64.green;
+        playSound('ok');
+      } else {
+        errors++;
+        karma = Math.max(0, karma - 5);
+        power = Math.max(0, power - 8);
+        flashColor = C64.red;
+        // Mostrar una respuesta correcta canónica
+        let first = validCombos.values().next().value;
+        if (first) {
+          let [cr, cc, dr, dc] = first.split(',').map(Number);
+          feedbackMsg = `✗  Era: ${cellName('A',cr,cc)}(${A[cr][cc]}) + ${cellName('B',dr,dc)}(${B[dr][dc]}) = ${targetValue}`;
+        } else {
+          feedbackMsg = `✗  Incorrecto.`;
+        }
+        feedbackColor = C64.red;
+        playSound('err');
+      }
+      
+      flashAlpha = 120;
+      feedbackTimer = 2.2;
+      
+      // Programar siguiente desafío
+      setTimeout(() => { if (gameState === 'playing') nextChallenge(); }, 2400);
+    }
+
+    // ---------- AUDIO SINTETIZADO (Web Audio) ----------
+    function initAudio() {
+      if (audioCtx) return;
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        sfxEnabled = true;
+      } catch(e) { sfxEnabled = false; }
+    }
+
+    function playSound(type) {
+      if (!sfxEnabled || !audioCtx) return;
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+      const now = audioCtx.currentTime;
+      const gain = audioCtx.createGain();
+      gain.connect(audioCtx.destination);
+      gain.gain.setValueAtTime(0.15, now);
+      
+      const osc = audioCtx.createOscillator();
+      osc.connect(gain);
+      
+      switch(type) {
+        case 'tap': osc.type = 'square'; osc.frequency.value = 660; gain.gain.exponentialRampToValueAtTime(0.001, now+0.03); osc.start(); osc.stop(now+0.03); break;
+        case 'ok':
+          const osc1 = audioCtx.createOscillator(); osc1.type='square'; osc1.frequency.value=880;
+          const g1 = audioCtx.createGain(); g1.gain.setValueAtTime(0.15,now); g1.gain.exponentialRampToValueAtTime(0.001,now+0.06);
+          osc1.connect(g1); g1.connect(audioCtx.destination); osc1.start(); osc1.stop(now+0.06);
+          setTimeout(()=>{
+            const osc2 = audioCtx.createOscillator(); osc2.type='square'; osc2.frequency.value=1318;
+            const g2 = audioCtx.createGain(); g2.gain.setValueAtTime(0.15,audioCtx.currentTime); g2.gain.exponentialRampToValueAtTime(0.001,audioCtx.currentTime+0.09);
+            osc2.connect(g2); g2.connect(audioCtx.destination); osc2.start(); osc2.stop(audioCtx.currentTime+0.09);
+          },70);
+          break;
+        case 'err': osc.type = 'sawtooth'; osc.frequency.value = 180; gain.gain.exponentialRampToValueAtTime(0.001, now+0.16); osc.start(); osc.stop(now+0.16); break;
+        case 'select': osc.type = 'triangle'; osc.frequency.value = 440; gain.gain.exponentialRampToValueAtTime(0.001, now+0.04); osc.start(); osc.stop(now+0.04); break;
+        case 'win':
+          const notes = [523,659,784,1046];
+          notes.forEach((f,i)=>{
+            const o = audioCtx.createOscillator(); o.type='square'; o.frequency.value=f;
+            const g = audioCtx.createGain(); g.gain.setValueAtTime(0.12, now+i*0.15); g.gain.exponentialRampToValueAtTime(0.001, now+i*0.15+0.13);
+            o.connect(g); g.connect(audioCtx.destination); o.start(now+i*0.15); o.stop(now+i*0.15+0.13);
+          });
+          break;
+        case 'modem':
+          // Sintetizado simple
+          const dur = 1.6;
+          const o = audioCtx.createOscillator(); o.type='sawtooth';
+          const g = audioCtx.createGain(); g.gain.setValueAtTime(0.1,now); g.gain.linearRampToValueAtTime(0.05, now+dur);
+          o.frequency.setValueAtTime(1200, now);
+          o.frequency.linearRampToValueAtTime(2400, now+0.3);
+          o.frequency.linearRampToValueAtTime(600, now+0.6);
+          o.frequency.linearRampToValueAtTime(1800, now+0.9);
+          o.frequency.linearRampToValueAtTime(900, now+1.2);
+          o.frequency.linearRampToValueAtTime(1500, now+1.5);
+          o.connect(g); g.connect(audioCtx.destination);
+          o.start(); o.stop(now+dur);
+          break;
+      }
+    }
+
+    // ---------- DIBUJADO ----------
+    function drawGridBackground() {
+      ctx.fillStyle = C64.bg;
+      ctx.fillRect(0, 0, W, H);
+      ctx.strokeStyle = C64.grid;
+      ctx.lineWidth = 1;
+      for (let x=0; x<W; x+=32) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+      for (let y=0; y<H; y+=32) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+    }
+
+    function drawScanlines() {
+      ctx.fillStyle = 'rgba(0,0,0,0.07)';
+      for (let y=0; y<H; y+=4) ctx.fillRect(0, y, W, 2);
+    }
+
+    function drawText(text, x, y, font='14px "Courier New", monospace', color=C64.white, align='left') {
+      ctx.font = font;
+      ctx.fillStyle = color;
+      ctx.textAlign = align;
+      ctx.shadowColor = '#000'; ctx.shadowBlur = 3;
+      ctx.fillText(text, x, y);
+      ctx.shadowBlur = 0;
+    }
+
+    function drawBox(x, y, w, h, borderColor, fillColor=null) {
+      if (fillColor) { ctx.fillStyle = fillColor; ctx.fillRect(x, y, w, h); }
+      ctx.strokeStyle = borderColor; ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, w, h);
+    }
+
+    function drawCellButton(x, y, label, value, selected, correct, wrong, matColor) {
+      let fill, border;
+      if (correct) { fill = '#146414'; border = C64.green; }
+      else if (wrong) { fill = '#640a0a'; border = C64.red; }
+      else if (selected) { fill = '#282878'; border = C64.cyan; }
+      else { fill = '#0a0a2d'; border = matColor; }
+      
+      ctx.fillStyle = fill;
+      ctx.fillRect(x, y, MAT_CELL_W, MAT_CELL_H);
+      ctx.strokeStyle = border; ctx.lineWidth = 2;
+      ctx.strokeRect(x, y, MAT_CELL_W, MAT_CELL_H);
+      
+      drawText(label, x+4, y+14, '10px monospace', C64.grey);
+      ctx.font = 'bold 18px "Courier New", monospace';
+      ctx.fillStyle = correct ? C64.green : (wrong ? C64.red : (selected ? C64.cyan : C64.white));
+      ctx.textAlign = 'center';
+      ctx.fillText(value, x+MAT_CELL_W/2, y+MAT_CELL_H/2+6);
+      ctx.textAlign = 'left';
+    }
+
+    function draw() {
+      drawGridBackground();
+      
+      // Cabecera
+      drawText('🔍 DETECTIVE LAB', W/2, 30, 'bold 22px "Courier New", monospace', C64.yellow, 'center');
+      drawText(`DESAFIO ${challengeIndex+1} DE ${TOTAL_CHALLENGES}   ✓ ${score}   ✗ ${errors}`, W/2, 55, '14px monospace', C64.grey, 'center');
+      
+      if (gameState === 'modem') {
+        drawModemScreen();
+        drawScanlines();
+        return;
+      }
+      
+      if (gameState === 'gameover') {
+        drawEndScreen();
+        drawScanlines();
+        return;
+      }
+      
+      // Instrucción
+      drawText('Elegí una celda de A y una de B cuya suma sea:', W/2, 80, '12px monospace', C64.grey, 'center');
+      
+      // Target C titilante
+      let blink = (Math.floor(animTime * 3) % 2 === 0);
+      let targetCol = blink ? C64.cyan : C64.yellow;
+      drawBox(W-240, 95, 220, 50, targetCol, '#080823');
+      drawText(targetName, W-230, 110, '12px monospace', C64.grey);
+      ctx.font = 'bold 28px "Courier New", monospace';
+      ctx.fillStyle = targetCol;
+      ctx.textAlign = 'center';
+      ctx.fillText(targetValue, W-130, 135);
+      ctx.textAlign = 'left';
+      
+      // Mostrar fórmula parcial debajo
+      let aSelStr = selA ? cellName('A', selA.r, selA.c) : '___';
+      let bSelStr = selB ? cellName('B', selB.r, selB.c) : '___';
+      drawText(`${targetName} = ${aSelStr} + ${bSelStr}`, W-130, 165, '14px monospace', C64.white, 'center');
+      
+      // Matrices A y B
+      const ax0 = 32, bx0 = ax0 + 3*MAT_CELL_W + 2*MAT_GAP + 58;
+      const y0 = 150;
+      
+      drawText('MATRIZ A', ax0 + (3*MAT_CELL_W+2*MAT_GAP)/2, y0-10, '18px monospace', C64.border, 'center');
+      drawText('MATRIZ B', bx0 + (3*MAT_CELL_W+2*MAT_GAP)/2, y0-10, '18px monospace', C64.magenta, 'center');
+      
+      // Dibujar celdas A
+      for (let r=0; r<3; r++) for (let c=0; c<3; c++) {
+        let x = ax0 + c*(MAT_CELL_W+MAT_GAP), y = y0 + r*(MAT_CELL_H+MAT_GAP);
+        let selected = (selA && selA.r===r && selA.c===c);
+        let correct = (confirmed && selected && validCombos.has(`${r},${c},${selB?.r},${selB?.c}`));
+        let wrong = (confirmed && selected && !correct);
+        drawCellButton(x, y, cellName('A',r,c), A[r][c], selected, correct, wrong, C64.border);
+      }
+      // Dibujar celdas B
+      for (let r=0; r<3; r++) for (let c=0; c<3; c++) {
+        let x = bx0 + c*(MAT_CELL_W+MAT_GAP), y = y0 + r*(MAT_CELL_H+MAT_GAP);
+        let selected = (selB && selB.r===r && selB.c===c);
+        let correct = (confirmed && selected && validCombos.has(`${selA?.r},${selA?.c},${r},${c}`));
+        let wrong = (confirmed && selected && !correct);
+        drawCellButton(x, y, cellName('B',r,c), B[r][c], selected, correct, wrong, C64.magenta);
+      }
+      
+      // Signo +
+      ctx.font = '32px monospace'; ctx.fillStyle = C64.yellow; ctx.textAlign='center';
+      ctx.fillText('+', ax0 + 3*MAT_CELL_W+2*MAT_GAP + 14, y0 + 90);
+      
+      // Matriz C (solo visual)
+      const cx0 = bx0 + 3*MAT_CELL_W + 2*MAT_GAP + 48;
+      drawText('MATRIZ C', cx0 + (3*MAT_CELL_W+2*MAT_GAP)/2, y0-10, '18px monospace', C64.green, 'center');
+      for (let r=0; r<3; r++) for (let c=0; c<3; c++) {
+        let x = cx0 + c*(MAT_CELL_W+MAT_GAP), y = y0 + r*(MAT_CELL_H+MAT_GAP);
+        let isTarget = (cellName('C',r,c) === targetName);
+        let fill = isTarget ? (blink ? '#145014' : '#080823') : '#082008';
+        drawBox(x, y, MAT_CELL_W, MAT_CELL_H, isTarget ? targetCol : C64.green, fill);
+        drawText(cellName('C',r,c), x+4, y+14, '10px monospace', C64.dim);
+        if (isTarget) {
+          ctx.font = 'bold 22px monospace'; ctx.fillStyle = targetCol;
+          ctx.fillText('?', x+MAT_CELL_W/2, y+MAT_CELL_H/2+6);
+        } else {
+          ctx.font = 'bold 16px monospace'; ctx.fillStyle = C64.green;
+          ctx.fillText(C[r][c], x+MAT_CELL_W/2, y+MAT_CELL_H/2+6);
+        }
+      }
+      
+      // Ecuación inferior
+      if (selA && selB) {
+        let sum = A[selA.r][selA.c] + B[selB.r][selB.c];
+        let eqColor = (sum === targetValue) ? C64.cyan : C64.orange;
+        drawText(`${targetName} = ${cellName('A',selA.r,selA.c)}(${A[selA.r][selA.c]}) + ${cellName('B',selB.r,selB.c)}(${B[selB.r][selB.c]}) = ${sum}`, W/2, H-70, '16px monospace', eqColor, 'center');
+      }
+      
+      // Botón confirmar
+      let ready = selA && selB;
+      let btnX = W/2 - 90, btnY = H-50, btnW = 180, btnH = 40;
+      drawBox(btnX, btnY, btnW, btnH, ready ? C64.green : C64.dim, ready ? '#0a320a' : '#0a0a1e');
+      drawText(ready ? '[ CONFIRMAR ]' : '[ elegí A y B ]', W/2, btnY+25, '14px monospace', ready ? C64.green : C64.dim, 'center');
+      
+      // Panel stats derecha
+      drawStatsPanel();
+      
+      // Feedback
+      if (feedbackTimer > 0) {
+        ctx.globalAlpha = Math.min(1, feedbackTimer * 0.8);
+        drawText(feedbackMsg, W/2, H-100, '14px monospace', feedbackColor, 'center');
+        ctx.globalAlpha = 1.0;
+      }
+      
+      // Flash
+      if (flashAlpha > 0) {
+        ctx.fillStyle = flashColor + Math.floor(flashAlpha).toString(16).padStart(2,'0');
+        ctx.fillRect(0,0,W,H);
+        flashAlpha = Math.max(0, flashAlpha-4);
+      }
+      
+      drawScanlines();
+      drawRestartHint();
+    }
+
+    function drawStatsPanel() {
+      let px = W - 185, py = 150;
+      drawBox(px-8, py-8, 175, 220, C64.border, '#08081e');
+      
+      let bounce = Math.sin(animTime * 3) * 4;
+      ctx.font = '36px "Segoe UI Emoji", "Noto Emoji", sans-serif';
+      ctx.fillStyle = C64.white;
+      ctx.textAlign = 'center';
+      ctx.fillText(pet.emoji, px + 80, py + 20 + bounce);
+      
+      drawText(pet.name, px + 80, py + 60, '14px monospace', C64.yellow, 'center');
+      drawText(pet.poder, px + 80, py + 78, '12px monospace', C64.grey, 'center');
+      
+      // Karma
+      drawText('KARMA', px, py+100, '12px monospace', C64.cyan);
+      let barW = 120;
+      ctx.fillStyle = C64.dim; ctx.fillRect(px, py+110, barW, 8);
+      let kfill = barW * Math.min(karma,120)/120;
+      if (kfill>0) { ctx.fillStyle = C64.cyan; ctx.fillRect(px, py+110, kfill, 8); }
+      drawText(''+karma, px+barW+5, py+118, '12px monospace', C64.cyan);
+      
+      // Power
+      drawText('POWER', px, py+140, '12px monospace', C64.green);
+      ctx.fillStyle = C64.dim; ctx.fillRect(px, py+150, barW, 8);
+      let pfill = barW * power/100;
+      ctx.fillStyle = power>40 ? C64.green : C64.orange;
+      ctx.fillRect(px, py+150, pfill, 8);
+      drawText(power+'%', px+barW+5, py+158, '12px monospace', C64.green);
+      
+      drawText(`✓ ${score}  ✗ ${errors}`, px+60, py+190, '14px monospace', C64.white, 'center');
+    }
+
+    function drawModemScreen() {
+      let elapsed = (performance.now() - modemStartTime) / 1000;
+      drawBox(80, 130, W-160, 360, C64.cyan, '#040414');
+      drawText('// CALCULANDO SIGUIENTE DESAFIO...', W/2, 170, '18px monospace', C64.cyan, 'center');
+      ctx.strokeStyle = C64.dim; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(100,190); ctx.lineTo(W-100,190); ctx.stroke();
+      
+      modemLines.forEach((line, i) => {
+        if (elapsed > i*0.28) {
+          let col = [C64.cyan, C64.yellow, C64.green, C64.grey][i%4];
+          let cursor = (i===modemLines.length-1 && (Math.floor(animTime*4)%2===0)) ? '_' : '';
+          drawText(`> ${line}${cursor}`, 130, 240 + i*34, '14px monospace', col);
+        }
+      });
+      
+      let prog = Math.min(1, elapsed / 1.7);
+      ctx.fillStyle = C64.dim; ctx.fillRect(100, 430, W-200, 14);
+      ctx.fillStyle = C64.cyan; ctx.fillRect(102, 432, (W-204)*prog, 10);
+      drawText(`${Math.floor(prog*100)}%`, W/2, 460, '12px monospace', C64.grey, 'center');
+    }
+
+    function drawEndScreen() {
+      let pct = Math.floor(score / TOTAL_CHALLENGES * 100);
+      let col = pct>=60 ? C64.green : C64.orange;
+      drawText('🔍 DETECTIVE LAB — RESULTADO', W/2, 100, 'bold 24px monospace', C64.yellow, 'center');
+      drawText(`✓ CORRECTAS : ${score} / ${TOTAL_CHALLENGES}`, W/2, 180, '20px monospace', C64.green, 'center');
+      drawText(`✗ ERRORES   : ${errors}`, W/2, 220, '20px monospace', C64.red, 'center');
+      drawText(`PUNTUACION  : ${pct}%`, W/2, 260, '20px monospace', col, 'center');
+      
+      let msg = pct===100 ? '★ DETECTIVE EXPERTO ★' : (pct>=60 ? '¡MUY BIEN, DETECTIVE!' : 'SEGUÍ ENTRENANDO...');
+      drawText(msg, W/2, 330 + Math.sin(animTime*3)*6, 'bold 22px monospace', col, 'center');
+      
+      let btnX = W/2-120, btnY = 420;
+      drawBox(btnX, btnY, 240, 50, C64.cyan, '#08081e');
+      drawText('[ R ]  JUGAR DE NUEVO', W/2, btnY+30, '16px monospace', C64.cyan, 'center');
+      drawText('ASPR ORACLE NODE v2.0  ·  KIDSLAB.IO', W/2, H-30, '12px monospace', C64.dim, 'center');
+    }
+
+    function drawRestartHint() {
+      drawText('⭯ [R] Reiniciar', 20, H-20, '12px monospace', C64.orange);
+    }
+
+    // ---------- MANEJO DE ENTRADA ----------
+    function handleKeyDown(e) {
+      let key = e.key;
+      initAudio();
+      
+      if (key === 'r' || key === 'R') { startNewGame(); e.preventDefault(); return; }
+      if (gameState !== 'playing' || confirmed) return;
+      
+      // Teclas numéricas 1-9 -> A
+      if (/^[1-9]$/.test(key)) {
+        let idx = parseInt(key) - 1;
+        let r = Math.floor(idx/3), c = idx%3;
+        selA = {r, c};
+        playSound('select');
+        e.preventDefault();
+      }
+      // Teclas QWE ASD ZXC -> B (mapeo)
+      const keyMapB = { 'q':0, 'w':1, 'e':2, 'a':3, 's':4, 'd':5, 'z':6, 'x':7, 'c':8 };
+      let lower = key.toLowerCase();
+      if (lower in keyMapB) {
+        let idx = keyMapB[lower];
+        let r = Math.floor(idx/3), c = idx%3;
+        selB = {r, c};
+        playSound('select');
+        e.preventDefault();
+      }
+      // Enter / Space -> confirmar
+      if (key === 'Enter' || key === ' ') {
+        if (selA && selB && !confirmed) {
+          confirmSelection();
+          playSound('tap');
+        }
+        e.preventDefault();
+      }
+    }
+
+    function handleCanvasClick(e) {
+      initAudio();
+      if (gameState !== 'playing' || confirmed) return;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      let clientX, clientY;
+      if (e.touches) { clientX = e.touches[0].clientX; clientY = e.touches[0].clientY; e.preventDefault(); }
+      else { clientX = e.clientX; clientY = e.clientY; }
+      
+      const canvasX = (clientX - rect.left) * scaleX;
+      const canvasY = (clientY - rect.top) * scaleY;
+      
+      // Verificar botón confirmar
+      if (canvasX >= W/2-90 && canvasX <= W/2+90 && canvasY >= H-50 && canvasY <= H-10) {
+        if (selA && selB && !confirmed) {
+          confirmSelection();
+          playSound('tap');
+        }
+        return;
+      }
+      
+      // Detectar clic en celdas A
+      const ax0 = 32, y0 = 150;
+      for (let r=0; r<3; r++) for (let c=0; c<3; c++) {
+        let x = ax0 + c*(MAT_CELL_W+MAT_GAP), y = y0 + r*(MAT_CELL_H+MAT_GAP);
+        if (canvasX >= x && canvasX <= x+MAT_CELL_W && canvasY >= y && canvasY <= y+MAT_CELL_H) {
+          selA = {r, c}; playSound('select'); return;
+        }
+      }
+      // Detectar celdas B
+      const bx0 = ax0 + 3*MAT_CELL_W + 2*MAT_GAP + 58;
+      for (let r=0; r<3; r++) for (let c=0; c<3; c++) {
+        let x = bx0 + c*(MAT_CELL_W+MAT_GAP), y = y0 + r*(MAT_CELL_H+MAT_GAP);
+        if (canvasX >= x && canvasX <= x+MAT_CELL_W && canvasY >= y && canvasY <= y+MAT_CELL_H) {
+          selB = {r, c}; playSound('select'); return;
+        }
+      }
+    }
+
+    // ---------- BUCLE ANIMACIÓN ----------
+    function gameLoop(now) {
+      animTime += 0.016;
+      demoTime += 0.016;
+      
+      if (gameState === 'modem' && performance.now() >= modemUntil) {
+        modemActive = false;
+        gameState = 'playing';
+      }
+      
+      if (feedbackTimer > 0) feedbackTimer -= 0.016;
+      
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ---------- INICIALIZAR ----------
+    function init() {
+      startNewGame();
+      window.addEventListener('keydown', handleKeyDown);
+      canvas.addEventListener('click', handleCanvasClick);
+      canvas.addEventListener('touchstart', handleCanvasClick, {passive: false});
+      canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+      requestAnimationFrame(gameLoop);
+    }
+
+    init();
+  })();
+</script>
+</body>
+</html>
